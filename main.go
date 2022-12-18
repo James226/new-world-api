@@ -3,21 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
 	"github.com/james226/collab-api/diagram"
+	"github.com/segmentio/ksuid"
 	"log"
 	"net/http"
 	"os"
-	"sync"
 )
 
 type ClientMessage struct {
 	Message diagram.Message
-}
-
-func CreateBroker(id string, onClose func()) *Broker {
-	log.Printf("Creating broker: %s", id)
-	return NewBroker(id, onClose)
 }
 
 func setCors(h http.Handler) http.Handler {
@@ -42,38 +38,25 @@ func setCors(h http.Handler) http.Handler {
 func main() {
 	router := mux.NewRouter()
 
-	brokers := make(map[string]*Broker)
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "redis-14146.c268.eu-west-1-2.ec2.cloud.redislabs.com:14146",
+		Password: os.Getenv("REDIS_PASSWORD"), // no password set
+		DB:       0,                           // use default DB
+	})
 
-	mu := sync.Mutex{}
+	defer rdb.Close()
 
 	router.Handle("/health", healthController{})
 
 	router.HandleFunc("/events/{id:[\\w\\d]+}", func(response http.ResponseWriter, request *http.Request) {
 		id := mux.Vars(request)["id"]
-		mu.Lock()
-		broker, ok := brokers[id]
-		if !ok {
-			broker = CreateBroker(id, func() {
-				delete(brokers, id)
-			})
-			brokers[id] = broker
-		}
-		mu.Unlock()
-		broker.ServeHTTP(response, request)
+		c := NewClient(id)
+
+		c.ServeHTTP(response, request, rdb)
 	})
 
 	router.HandleFunc("/update/{id:[\\w\\d]+}", func(response http.ResponseWriter, request *http.Request) {
-		id := mux.Vars(request)["id"]
-		mu.Lock()
-		broker, ok := brokers[id]
-		if !ok {
-			broker = CreateBroker(id, func() {
-				delete(brokers, id)
-			})
-			brokers[id] = broker
-		}
-
-		mu.Unlock()
+		//id := mux.Vars(request)["id"]
 
 		if request.Method == "OPTIONS" {
 			return
@@ -88,7 +71,22 @@ func main() {
 			return
 		}
 
-		broker.Notifier <- ClientMessage{Message: msg}
+		data, _ := json.Marshal(msg)
+
+		err = rdb.Publish(request.Context(), "location-1.1.1", data).Err()
+		if err != nil {
+			panic(err)
+		}
+	})
+
+	router.HandleFunc("/client", func(response http.ResponseWriter, request *http.Request) {
+		id := ksuid.New().String()
+		log.Printf("Client Connected %s", id)
+		c := NewWebsocket(id)
+
+		c.ServeHTTP(response, request, rdb)
+		log.Printf("Client closed %s", id)
+
 	})
 
 	port := os.Getenv("PORT")
