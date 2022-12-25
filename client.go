@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/go-redis/redis/v8"
-	"github.com/james226/collab-api/diagram"
 	"log"
 	"net/http"
+
+	"github.com/go-redis/redis/v8"
+
+	"github.com/james226/new-world-api/diagram"
 )
 
 type Client struct {

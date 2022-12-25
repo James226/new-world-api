@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/go-redis/redis/v8"
-	"github.com/gorilla/websocket"
-	"github.com/james226/collab-api/diagram"
+	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/go-redis/redis/v8"
+	"github.com/gorilla/websocket"
+
+	"github.com/james226/new-world-api/diagram"
 )
 
 type Websocket struct {
@@ -81,9 +84,15 @@ func (c *Websocket) ServeHTTP(rw http.ResponseWriter, req *http.Request, rdb *re
 
 	c.messageChan = make(chan diagram.Message)
 
-	err = ws.WriteMessage(1, []byte("{\"type\":\"connected\"}"))
+	err = ws.WriteMessage(1, []byte(fmt.Sprintf("{\"type\":\"connected\", \"clientId\": \"%s\"}", c.Id)))
 	if err != nil {
 		log.Println(err)
+	}
+
+	message := fmt.Sprintf("{\"type\":\"client_connected\", \"clientId\": \"%s\"}", c.Id)
+	err = rdb.Publish(req.Context(), "location-1.1.1", []byte(message)).Err()
+	if err != nil {
+		panic(err)
 	}
 
 	c.MessageLoop(rw, ws)

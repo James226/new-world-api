@@ -3,13 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-redis/redis/v8"
-	"github.com/gorilla/mux"
-	"github.com/james226/collab-api/diagram"
-	"github.com/segmentio/ksuid"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/go-redis/redis/v8"
+	"github.com/gorilla/mux"
+	"github.com/segmentio/ksuid"
+
+	"github.com/james226/new-world-api/diagram"
 )
 
 type ClientMessage struct {

@@ -1,4 +1,4 @@
-module github.com/james226/collab-api
+module github.com/james226/new-world-api
 
 go 1.15
 
