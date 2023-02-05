@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
@@ -107,9 +108,9 @@ func (c *Websocket) ServeHTTP(rw http.ResponseWriter, req *http.Request, rdb *re
 
 	tokenString, err := c.stateManager.Serialize(State{
 		Position: Point{
-			X: 2005000,
-			Y: 0,
-			Z: -5000,
+			X: 1995000,
+			Y: 300,
+			Z: 1000,
 		},
 	})
 
