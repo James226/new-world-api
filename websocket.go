@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/golang-jwt/jwt/v4"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
@@ -14,14 +16,16 @@ import (
 )
 
 type Websocket struct {
-	Id          string
-	messageChan chan diagram.Message
-	notify      <-chan struct{}
+	Id           string
+	messageChan  chan []byte
+	notify       <-chan struct{}
+	stateManager *StateManager
 }
 
-func NewWebsocket(id string) *Websocket {
+func NewWebsocket(id string, manager *StateManager) *Websocket {
 	return &Websocket{
-		Id: id,
+		Id:           id,
+		stateManager: manager,
 	}
 }
 
@@ -49,17 +53,6 @@ func (c *Websocket) ServeHTTP(rw http.ResponseWriter, req *http.Request, rdb *re
 	defer location.Close()
 
 	go func() {
-		ch := location.Channel()
-
-		for msg := range ch {
-			var message diagram.Message
-			json.Unmarshal([]byte(msg.Payload), &message)
-
-			c.messageChan <- message
-		}
-	}()
-
-	go func() {
 		for {
 			// read in a message
 			_, p, err := ws.ReadMessage()
@@ -77,14 +70,50 @@ func (c *Websocket) ServeHTTP(rw http.ResponseWriter, req *http.Request, rdb *re
 
 			err = rdb.Publish(req.Context(), "location-1.1.1", bytes).Err()
 			if err != nil {
-				panic(err)
+				ws.Close()
 			}
+
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+				"foo": "bar",
+				"nbf": time.Now().Unix(),
+			})
+
+			tokenString, err := token.SignedString([]byte("my_secret_key"))
+
+			c.messageChan <- []byte(fmt.Sprintf("{\"state\": \"%s\"}", tokenString))
 		}
 	}()
 
-	c.messageChan = make(chan diagram.Message)
+	go func() {
+		ch := location.Channel()
 
-	err = ws.WriteMessage(1, []byte(fmt.Sprintf("{\"type\":\"connected\", \"clientId\": \"%s\"}", c.Id)))
+		for msg := range ch {
+			c.messageChan <- []byte(msg.Payload)
+		}
+	}()
+
+	c.messageChan = make(chan []byte)
+
+	//token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	//	"position": map[string]int{
+	//		"x": 2005000,
+	//		"y": 0,
+	//		"z": 5000,
+	//	},
+	//	"nbf": time.Now().Unix(),
+	//})
+	//
+	//tokenString, err := token.SignedString([]byte("my_secret_key"))
+
+	tokenString, err := c.stateManager.Serialize(State{
+		Position: Point{
+			X: 2005000,
+			Y: 0,
+			Z: -5000,
+		},
+	})
+
+	err = ws.WriteMessage(1, []byte(fmt.Sprintf("{\"type\":\"connected\", \"clientId\": \"%s\", \"state\":\"%s\"}", c.Id, tokenString)))
 	if err != nil {
 		log.Println(err)
 	}
@@ -105,8 +134,7 @@ func (c *Websocket) MessageLoop(rw http.ResponseWriter, ws *websocket.Conn) {
 	for {
 		select {
 		case m := <-c.messageChan:
-			bytes, _ := json.Marshal(m)
-			err := ws.WriteMessage(1, bytes)
+			err := ws.WriteMessage(1, m)
 			if err != nil {
 				log.Println("Websocket write error", err)
 				return

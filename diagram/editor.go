@@ -16,4 +16,5 @@ type Message struct {
 	ClientId string  `json:"clientId"`
 	Type     string  `json:"type"`
 	Position Vector3 `json:"position"`
+	State    string  `json:"state"`
 }

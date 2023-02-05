@@ -13,14 +13,16 @@ import (
 )
 
 type Client struct {
-	Id          string
-	messageChan chan diagram.Message
-	notify      <-chan struct{}
+	Id           string
+	messageChan  chan diagram.Message
+	notify       <-chan struct{}
+	stateManager *StateManager
 }
 
-func NewClient(id string) *Client {
+func NewClient(id string, manager *StateManager) *Client {
 	return &Client{
-		Id: id,
+		Id:           id,
+		stateManager: manager,
 	}
 }
 

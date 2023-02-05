@@ -3,13 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
-	"os"
-
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
 	"github.com/segmentio/ksuid"
+	"log"
+	"net/http"
+	"os"
 
 	"github.com/james226/new-world-api/diagram"
 )
@@ -40,6 +39,13 @@ func setCors(h http.Handler) http.Handler {
 func main() {
 	router := mux.NewRouter()
 
+	stateSecret := os.Getenv("STATE_SECRET")
+	if stateSecret == "" {
+		stateSecret = "my-secret-key"
+	}
+
+	stateManager := NewStateManager([]byte(stateSecret))
+
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     "redis-14146.c268.eu-west-1-2.ec2.cloud.redislabs.com:14146",
 		Password: os.Getenv("REDIS_PASSWORD"), // no password set
@@ -52,13 +58,15 @@ func main() {
 
 	router.HandleFunc("/events/{id:[\\w\\d]+}", func(response http.ResponseWriter, request *http.Request) {
 		id := mux.Vars(request)["id"]
-		c := NewClient(id)
+		c := NewClient(id, stateManager)
 
 		c.ServeHTTP(response, request, rdb)
 	})
 
 	router.HandleFunc("/update/{id:[\\w\\d]+}", func(response http.ResponseWriter, request *http.Request) {
 		//id := mux.Vars(request)["id"]
+
+		//state := request.Header.Get("State")
 
 		if request.Method == "OPTIONS" {
 			return
@@ -84,7 +92,7 @@ func main() {
 	router.HandleFunc("/client", func(response http.ResponseWriter, request *http.Request) {
 		id := ksuid.New().String()
 		log.Printf("Client Connected %s", id)
-		c := NewWebsocket(id)
+		c := NewWebsocket(id, stateManager)
 
 		c.ServeHTTP(response, request, rdb)
 		log.Printf("Client closed %s", id)
