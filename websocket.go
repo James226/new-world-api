@@ -65,6 +65,12 @@ func (c *Websocket) ServeHTTP(rw http.ResponseWriter, req *http.Request, rdb *re
 			var message diagram.Message
 			json.Unmarshal(p, &message)
 
+			if message.Type == "build" {
+				var build diagram.Build
+				json.Unmarshal([]byte(message.Data), &build)
+				print("foo")
+			}
+
 			message.ClientId = c.Id
 
 			bytes, err := json.Marshal(message)
